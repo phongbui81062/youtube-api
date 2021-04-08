@@ -1,0 +1,4 @@
+celery
+celery[librabbitmq]
+fastapi
+uvicorn[standard]

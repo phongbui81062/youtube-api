@@ -1,0 +1,79 @@
+version: "3"
+services:
+    redis:
+        image: "bitnami/redis:5.0.4"
+        container_name: redis
+        ports:
+            - "6379:6379"
+        environment:
+            - ALLOW_EMPTY_PASSWORD: "yes"
+        volumes:
+            - "./redis_data:/var/lib/redis/data"
+    rabbitmq:
+        image: rabbitmq:3-management
+        container_name: 'rabbitmq'
+        ports:
+            - "4369:4369"
+            - "5672:5672"
+            - "25672:25672"
+            - "15672:15672"
+        volumes:
+            - ./rabbitmq/data/:/var/lib/rabbitmq/
+            - ./rabbitmq/log/:/var/log/rabbitmq/
+            - ./rabbitmq/rabbitmq-isolated.conf:/etc/rabbitmq/rabbitmq.config
+        environment:
+            RABBITMQ_ERLANG_COOKIE: 'CYZDFAJOFDZTSLMEQHIE'
+            RABBITMQ_DEFAULT_PASS: phong
+            RABBITMQ_DEFAULT_USER: abcxyz123456@
+            RABBITMQ_DEFAULT_VHOST: vhost
+    celery-flower:
+        image: gregsi/latest-celery-flower-docker:latest
+        container_name: "celery-flower"
+        environment:
+            - AMQP_USERNAME=phong
+            - AMQP_PASSWORD=phong
+            - AMQP_ADMIN_USERNAME=abcxyz123456@
+            - AMQP_ADMIN_PASSWORD=abcxyz123456@
+            - AMQP_HOST=localhost
+            - AMQP_PORT=5672
+            - AMQP_ADMIN_HOST=localhost
+            - AMQP_ADMIN_PORT=15672
+            - FLOWER_BASIC_AUTH=guest:test
+        ports:
+            - "5555:5555"
+        depends_on:
+            - rabbitmq
+            - redis
+    postgressql:
+        image: postgres:13
+        container_name: 'postgressql'
+        ports:
+            - 5432:5432
+        restart: on-failure
+        volumes:
+            - ./postgressql/data/:/var/log/postgressql/
+        environment:
+            - POSTGRES_DB=postgres
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+    worker:
+        image: eeacms/celery:4.3-1.0
+        container_name: 'celery'
+        environment:
+            REDIS_SERVER: 'redis://redis:6379'
+            RABBITMQ_SERVER: 'amqp://guest:guest@rabbitmq:5672'
+        depends_on:
+            - rabbitmq
+            - redis
+        volumes:
+            - "./:/app"
+        command: celery -A celery_app.tasks worker --loglevel=INFO
+    web:
+        build: 
+            context: .
+            dockerfile: Dockerfile
+        command: uvicorn app.main:app --host 0.0.0.0 --port 80
+        ports:
+            - "80:80"
+        depends_on:
+            - postgressql
