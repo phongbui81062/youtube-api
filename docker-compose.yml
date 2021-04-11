@@ -4,51 +4,64 @@ services:
         image: "bitnami/redis:5.0.4"
         container_name: redis
         ports:
-            - "6379:6379"
+            - '6379:6379'
         environment:
-            - ALLOW_EMPTY_PASSWORD: "yes"
+            - ALLOW_EMPTY_PASSWORD=yes
         volumes:
             - "./redis_data:/var/lib/redis/data"
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+        restart: always
     rabbitmq:
         image: rabbitmq:3-management
         container_name: 'rabbitmq'
         ports:
-            - "4369:4369"
-            - "5672:5672"
-            - "25672:25672"
-            - "15672:15672"
+            - '4369:4369'
+            - '5672:5672'
+            - '25672:25672'
+            - '15672:15672'
         volumes:
             - ./rabbitmq/data/:/var/lib/rabbitmq/
             - ./rabbitmq/log/:/var/log/rabbitmq/
             - ./rabbitmq/rabbitmq-isolated.conf:/etc/rabbitmq/rabbitmq.config
         environment:
-            RABBITMQ_ERLANG_COOKIE: 'CYZDFAJOFDZTSLMEQHIE'
-            RABBITMQ_DEFAULT_PASS: phong
-            RABBITMQ_DEFAULT_USER: abcxyz123456@
-            RABBITMQ_DEFAULT_VHOST: vhost
+            - RABBITMQ_ERLANG_COOKIE=BJEKNWMKESWLBUWTRPKA
+            - RABBITMQ_DEFAULT_USER=phong
+            - RABBITMQ_DEFAULT_PASS=phongbui62
+        healthcheck:
+            test: rabbitmq-diagnostics -q ping
+            interval: 30s
+            timeout: 10s
+            retries: 3
+        restart: always
+
     celery-flower:
-        image: gregsi/latest-celery-flower-docker:latest
-        container_name: "celery-flower"
+        image: mher/flower
+        container_name: flower
+        command: ['flower', '--broker=amqp://phong:phongbui62@rabbitmq:5672', '--port=5555']
         environment:
             - AMQP_USERNAME=phong
-            - AMQP_PASSWORD=phong
-            - AMQP_ADMIN_USERNAME=abcxyz123456@
-            - AMQP_ADMIN_PASSWORD=abcxyz123456@
-            - AMQP_HOST=localhost
+            - AMQP_PASSWORD=phongbui62
+            - AMQP_ADMIN_USERNAME=phong
+            - AMQP_ADMIN_PASSWORD=phongbui62
+            - AMQP_HOST=rabbitmq
             - AMQP_PORT=5672
-            - AMQP_ADMIN_HOST=localhost
+            - AMQP_ADMIN_HOST=rabbitmq
             - AMQP_ADMIN_PORT=15672
-            - FLOWER_BASIC_AUTH=guest:test
+            - FLOWER_BASIC_AUTH=phong:phongbui62
         ports:
-            - "5555:5555"
+            - '5555:5555'
         depends_on:
-            - rabbitmq
-            - redis
+            rabbitmq:
+                condition: service_healthy
     postgressql:
         image: postgres:13
         container_name: 'postgressql'
         ports:
-            - 5432:5432
+            - '5432:5432'
         restart: on-failure
         volumes:
             - ./postgressql/data/:/var/log/postgressql/
@@ -56,24 +69,37 @@ services:
             - POSTGRES_DB=postgres
             - POSTGRES_USER=postgres
             - POSTGRES_PASSWORD=postgres
-    worker:
-        image: eeacms/celery:4.3-1.0
-        container_name: 'celery'
-        environment:
-            REDIS_SERVER: 'redis://redis:6379'
-            RABBITMQ_SERVER: 'amqp://guest:guest@rabbitmq:5672'
+    worker1:
+        build: .
         depends_on:
-            - rabbitmq
-            - redis
+            rabbitmq:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
         volumes:
             - "./:/app"
-        command: celery -A celery_app.tasks worker --loglevel=INFO
-    web:
-        build: 
+        command: "celery -A app.worker.celery_worker worker --loglevel=INFO"
+    worker2:
+        build: .
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        volumes:
+            - "./:/app"
+        command: "celery -A app.worker.celery_worker worker --loglevel=INFO"
+    fastapi:
+        build:
             context: .
             dockerfile: Dockerfile
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        volumes:
+            - "./:/app"
         command: uvicorn app.main:app --host 0.0.0.0 --port 80
         ports:
-            - "80:80"
-        depends_on:
-            - postgressql
+            - '80:80'

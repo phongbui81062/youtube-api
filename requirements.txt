@@ -1,4 +1,8 @@
+pandas
 celery
-celery[librabbitmq]
+celery[librabbitmq,redis,auth,msgpack]
 fastapi
 uvicorn[standard]
+six
+google-api-python-client
+cookiecutter
