@@ -2,7 +2,10 @@ pandas
 celery
 celery[librabbitmq,redis,auth,msgpack]
 fastapi
+aiohttp
 uvicorn[standard]
 six
 google-api-python-client
 cookiecutter
+sqlalchemy
+psycopg2

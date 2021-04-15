@@ -1,7 +1,7 @@
 version: "3"
 services:
     redis:
-        image: "bitnami/redis:5.0.4"
+        image: "redis:latest"
         container_name: redis
         ports:
             - '6379:6379'
@@ -65,10 +65,15 @@ services:
         restart: on-failure
         volumes:
             - ./postgressql/data/:/var/log/postgressql/
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 30s
+            timeout: 5s
+            retries: 5
         environment:
             - POSTGRES_DB=postgres
-            - POSTGRES_USER=postgres
-            - POSTGRES_PASSWORD=postgres
+            - POSTGRES_USER=phong
+            - POSTGRES_PASSWORD=phongbui62
     worker1:
         build: .
         depends_on:
@@ -78,7 +83,7 @@ services:
                 condition: service_healthy
         volumes:
             - "./:/app"
-        command: "celery -A app.worker.celery_worker worker --loglevel=INFO"
+        command: "celery -A app.worker.celery_worker worker --loglevel=INFO -n worker1@phongbui.com"
     worker2:
         build: .
         depends_on:
@@ -88,7 +93,7 @@ services:
                 condition: service_healthy
         volumes:
             - "./:/app"
-        command: "celery -A app.worker.celery_worker worker --loglevel=INFO"
+        command: "celery -A app.worker.celery_worker worker --loglevel=INFO -n worker2@phongbui810.com"
     fastapi:
         build:
             context: .
@@ -97,6 +102,8 @@ services:
             rabbitmq:
                 condition: service_healthy
             redis:
+                condition: service_healthy
+            postgressql:
                 condition: service_healthy
         volumes:
             - "./:/app"
