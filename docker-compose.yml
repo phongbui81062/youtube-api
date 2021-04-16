@@ -64,14 +64,13 @@ services:
             - '5432:5432'
         restart: on-failure
         volumes:
-            - ./postgressql/data/:/var/log/postgressql/
+            - ./postgres/data/:/var/lib/postgressql/data
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            test: ["CMD-SHELL", "pg_isready -U phong"]
             interval: 30s
             timeout: 5s
             retries: 5
         environment:
-            - POSTGRES_DB=postgres
             - POSTGRES_USER=phong
             - POSTGRES_PASSWORD=phongbui62
     worker1:
