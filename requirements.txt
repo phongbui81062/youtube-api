@@ -4,6 +4,7 @@ celery[librabbitmq,redis,auth,msgpack]
 fastapi
 aiohttp
 uvicorn[standard]
+fastapi_utils
 six
 google-api-python-client
 cookiecutter

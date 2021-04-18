@@ -10,7 +10,9 @@ import aiohttp
 import asyncio
 from itertools import chain
 from .worker.apply_text_analytic import get_data
-from sqlalchemy import create_engine, DATETIME, String,FLOAT
+from sqlalchemy import create_engine, DATETIME, String, FLOAT
+from fastapi_utils.tasks import repeat_every
+
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +20,40 @@ app = FastAPI()
 
 engine = create_engine(
     "postgresql://phong:phongbui62@postgressql:5432/postgres")
+
+
+@app.on_event("startup")
+@repeat_every(seconds=35)
+async def hello() -> None:
+    query = '''
+        SELECT * FROM alo.data_before_analytic
+        limit 500
+    '''
+    data = pd.read_sql(query, engine)
+    if len(data) != 0:
+        async with aiohttp.ClientSession() as session:
+            response = await asyncio.gather(*[get_data(str(i), text, session) for i, text in enumerate(data['Comment'])])
+        df = pd.DataFrame(
+            list(chain(*list(map(lambda x: x['documents'], response)))))
+        df = df['confidenceScores'].apply(pd.Series)
+        df_final = data.merge(df, left_index=True,
+                              right_index=True, how='inner')
+        tuple_key_to_delete = tuple(df_final['key_gen'])
+        df_final = df_final.loc[:, df_final.columns != 'key_gen']
+        df_final.to_sql("data_analysted", con=engine,
+                        if_exists='append', index=False, schema="alo")
+        if len(tuple_key_to_delete) == 1:
+            query_string = f'''
+                DELETE FROM alo.data_before_analytic
+                WHERE key_gen = {tuple_key_to_delete[0]}
+            '''
+        else:
+            query_string = f'''
+                DELETE FROM alo.data_before_analytic
+                WHERE key_gen IN {tuple_key_to_delete}
+            '''
+        with engine.connect() as con:
+            con.execute(query_string)
 
 
 @app.get("/apply_analytic")
@@ -31,8 +67,9 @@ async def analytic():
     df = pd.DataFrame(
         list(chain(*list(map(lambda x: x['documents'], response)))))
     df = df['confidenceScores'].apply(pd.Series)
-    df_final = data.merge(df,left_index=True, right_index=True,how='inner')
-    df_final.to_sql("data_analysted",con=engine,if_exists='append',index=False,schema="alo")
+    df_final = data.merge(df, left_index=True, right_index=True, how='inner')
+    df_final.to_sql("data_analysted", con=engine,
+                    if_exists='append', index=False, schema="alo")
     return {"Success": "alooo"}
 
 
